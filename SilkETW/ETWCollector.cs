@@ -1,19 +1,16 @@
-﻿using System;
-using System.Diagnostics;
-using System.IO;
+﻿using System.Diagnostics;
 using Microsoft.Diagnostics.Tracing;
 using Microsoft.Diagnostics.Tracing.Session;
 using Microsoft.Diagnostics.Tracing.Parsers;
 using System.Xml;
 using System.Collections;
-using System.Collections.Generic;
 
 namespace SilkETW
 {
     class ETWCollector
     {
         
-        public static void StartTrace(CollectorType CollectorType, ulong TraceKeywords, OutputType OutputType, String Path, FilterOption FilterOption, Object FilterValue, String YaraScan, YaraOptions YaraOptions, String ProviderName = "", UserTraceEventLevel UserTraceEventLevel = UserTraceEventLevel.Informational)
+        public static void StartTrace(CollectorType CollectorType, ulong TraceKeywords, OutputType OutputType, String Path, FilterOption FilterOption, Object FilterValue, String ProviderName = "", UserTraceEventLevel UserTraceEventLevel = UserTraceEventLevel.Informational)
         {
             // Is elevated?
             if (TraceEventSession.IsElevated() != true)
@@ -96,7 +93,6 @@ namespace SilkETW
                             var eRecord = new EventRecordStruct
                             {
                                 ProviderGuid = data.ProviderGuid,
-                                YaraMatch = new List<String>(),
                                 ProviderName = data.ProviderName,
                                 EventName = data.EventName,
                                 Opcode = data.Opcode,
@@ -155,7 +151,7 @@ namespace SilkETW
 
                             // Serialize to JSON
                             String JSONEventData = Newtonsoft.Json.JsonConvert.SerializeObject(eRecord);
-                            int ProcessResult = SilkUtility.ProcessJSONEventData(JSONEventData, OutputType, Path, YaraScan, YaraOptions);
+                            int ProcessResult = SilkUtility.ProcessJSONEventData(JSONEventData, OutputType, Path);
 
                             // Verify that we processed the result successfully
                             if (ProcessResult != 0)
@@ -204,7 +200,7 @@ namespace SilkETW
                         {
                             ConvertKeywords = "0x" + String.Format("{0:X}", TraceKeywords);
                         }
-                        String Message = $"{{\"Collector\":\"Start\",\"Data\":{{\"Type\":\"{CollectorType}\",\"Provider\":\"{ProviderName}\",\"Keywords\":\"{ConvertKeywords}\",\"FilterOption\":\"{FilterOption}\",\"FilterValue\":\"{FilterValue}\",\"YaraPath\":\"{YaraScan}\",\"YaraOption\":\"{YaraOptions}\"}}}}";
+                        String Message = $"{{\"Collector\":\"Start\",\"Data\":{{\"Type\":\"{CollectorType}\",\"Provider\":\"{ProviderName}\",\"Keywords\":\"{ConvertKeywords}\",\"FilterOption\":\"{FilterOption}\",\"FilterValue\":\"{FilterValue}\"}}}}";
                         SilkUtility.WriteEventLogEntry(Message, EventLogEntryType.SuccessAudit, EventIds.Start, Path);
                     }
 

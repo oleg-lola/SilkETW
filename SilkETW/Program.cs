@@ -1,6 +1,4 @@
-using System.Runtime.InteropServices;
 using McMaster.Extensions.CommandLineUtils;
-using YaraSharp;
 
 namespace SilkETW
 {
@@ -43,12 +41,6 @@ namespace SilkETW
 
         [Option("-fv|--filtervalue", CommandOptionType.SingleValue)]
         public String FilterValue { get; } = String.Empty;
-
-        [Option("-y|--yara", CommandOptionType.SingleValue)]
-        public String YaraScan { get; } = String.Empty;
-
-        [Option("-yo|--yaraoptions", CommandOptionType.SingleValue)]
-        public YaraOptions YaraOptions { get; }
 
 
         public static void Main(string[] args)
@@ -238,76 +230,17 @@ namespace SilkETW
                 }
             }
 
-            // // Validate Yara folder path
-            if (YaraScan != String.Empty && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                try
-                {
-                    FileAttributes CheckAttrib = File.GetAttributes(YaraScan);
-                    if (!(CheckAttrib.HasFlag(FileAttributes.Directory)))
-                    {
-                        SilkUtility.ReturnStatusMessage("[!] Specified path is not a folder (-y|--yara)", ConsoleColor.Red);
-                        return;
-                    } else
-                    {
-                        List<string> YaraRuleCollection = Directory.GetFiles(YaraScan, "*.yar", SearchOption.AllDirectories).ToList();
-                        if (YaraRuleCollection.Count == 0)
-                        {
-                            SilkUtility.ReturnStatusMessage("[!] Yara folder path does not contain any *.yar files (-y|--yara)", ConsoleColor.Red);
-                            return;
-                        } else
-                        {
-                            // We already initialize yara for performace,
-                            // new rules can not be added at runtime.
-                            SilkUtility.YaraInstance = new YSInstance();
-                            SilkUtility.YaraContext = new YSContext();
-                            SilkUtility.YaraCompiler = SilkUtility.YaraInstance.CompileFromFiles(YaraRuleCollection,null);
-                            SilkUtility.YaraRules = SilkUtility.YaraCompiler.GetRules();
-                            YSReport YaraReport = SilkUtility.YaraCompiler.GetErrors();
-
-                            if (!(YaraReport.IsEmpty()))
-                            {
-                                SilkUtility.ReturnStatusMessage("[!] The following yara errors were detected (-y|--yara)", ConsoleColor.Red);
-
-                                Dictionary<string, List<string>> Errors = YaraReport.Dump();
-                                foreach (KeyValuePair<string, List<string>> Error in Errors)
-                                {
-                                    SilkUtility.ReturnStatusMessage("==> " + Error.Key, ConsoleColor.Yellow);
-                                    foreach (String ErrorMsg in Error.Value)
-                                    {
-                                        SilkUtility.ReturnStatusMessage("    + " + ErrorMsg, ConsoleColor.Yellow);
-                                    }
-                                }
-                                return;
-                            }
-
-                        }
-                    }
-                }
-                catch
-                {
-                    SilkUtility.ReturnStatusMessage("[!] Specify a valid yara rule folder path (-y|--yara)", ConsoleColor.Red);
-                    return;
-                }
-
-                if (YaraOptions == YaraOptions.None)
-                {
-                    SilkUtility.ReturnStatusMessage("[!] Specify a valid yara option (-yo|--yaraoptions)", ConsoleColor.Red);
-                    return;
-                }
-            }
-
             // We passed all collector parameter checks
             SilkUtility.ReturnStatusMessage("[+] Collector parameter validation success..", ConsoleColor.Green);
 
             // Launch the collector
             if (CollectorType == CollectorType.Kernel)
             {
-                ETWCollector.StartTrace(CollectorType, (ulong)KernelKeywords, OutputType, Path, FilterOption, SilkUtility.FilterValueObject, YaraScan, YaraOptions);
+                ETWCollector.StartTrace(CollectorType, (ulong)KernelKeywords, OutputType, Path, FilterOption, SilkUtility.FilterValueObject);
             }
             else
             {
-                ETWCollector.StartTrace(CollectorType, SilkUtility.UlongUserKeywords, OutputType, Path, FilterOption, SilkUtility.FilterValueObject, YaraScan, YaraOptions, ProviderName, UserTraceEventLevel);
+                ETWCollector.StartTrace(CollectorType, SilkUtility.UlongUserKeywords, OutputType, Path, FilterOption, SilkUtility.FilterValueObject, ProviderName, UserTraceEventLevel);
             }
         }
     }

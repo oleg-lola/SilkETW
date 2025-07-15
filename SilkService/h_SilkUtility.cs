@@ -2,7 +2,6 @@
 using System.Collections;
 using System.Security.AccessControl;
 using System.Security.Principal;
-using YaraSharp;
 
 namespace SilkService
 {
@@ -29,13 +28,6 @@ namespace SilkService
         ProcessID,
         ProcessName,
         Opcode
-    }
-
-    public enum YaraOptions
-    {
-        None = 0,
-        All,
-        Matches
     }
 
     public enum EventIds
@@ -238,7 +230,6 @@ namespace SilkService
     public struct EventRecordStruct
     {
         public Guid ProviderGuid;
-        public List<String> YaraMatch;
         public string ProviderName;
         public string EventName;
         public TraceEventOpcode Opcode;
@@ -265,12 +256,6 @@ namespace SilkService
         public Object UserKeywords;
         public FilterOption FilterOption;
         public Object FilterValue;
-        public String YaraScan;
-        public YaraOptions YaraOptions;
-        public YSInstance YaraInstance;
-        public YSContext YaraContext;
-        public YSCompiler YaraCompiler;
-        public YSRules YaraRules;
     }
 
     // Bookkeeper struct for service cleanup

@@ -14,6 +14,8 @@ dotnet publish SilkETW.csproj -c Release -r win-x64 --sc -o /your/output/destina
 # Similarly to build the service version
 cd ./SilkService
 dotnet publish SilkService.csproj -c Release -r win-x64 --sc -o /output/directory
+
+# Then install the publish artifact as a service using sc.exe: sc create "Silk Service" binpath="path_to_the_binary"
 ```
 
 ---

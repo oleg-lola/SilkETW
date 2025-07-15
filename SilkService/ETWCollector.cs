@@ -4,9 +4,6 @@ using Microsoft.Diagnostics.Tracing.Session;
 using Microsoft.Diagnostics.Tracing.Parsers;
 using System.Xml;
 using System.Collections;
-using YaraSharp;
-using System.Text;
-using Newtonsoft.Json.Linq;
 using System.Net;
 
 namespace SilkService
@@ -66,111 +63,81 @@ namespace SilkService
                 }
             }
 
-            int ProcessJSONEventData(String JSONData, OutputType OutputType, String Path, String YaraScan, YaraOptions YaraOptions, YSInstance YaraInstance, YSRules YaraRules)
+            int ProcessJSONEventData(String JSONData, OutputType OutputType, String Path)
             {
-                // Yara matches
-                List<String> YaraRuleMatches = new List<String>();
+				//--[Return Codes]
+				// 0 == OK
+				// 1 == File write failed
+				// 2 == URL POST request failed
+				// 3 == Eventlog write failed
+				//--
 
-                // Yara options
-                if (YaraScan != String.Empty)
-                {
-                    byte[] JSONByteArray = Encoding.ASCII.GetBytes(JSONData);
-                    List<YSMatches> Matches = YaraInstance.ScanMemory(JSONByteArray, YaraRules, null, 0);
-                    YaraRuleMatches.Clear();
-                    if (Matches.Count != 0)
-                    {
-                        foreach (YSMatches Match in Matches)
-                        {
-                            YaraRuleMatches.Add(Match.Rule.Identifier);
-                        }
+				// Process JSON
+				if (OutputType == OutputType.file)
+				{
+					try
+					{
+						if (!File.Exists(Path))
+						{
+							File.WriteAllText(Path, (JSONData + Environment.NewLine));
+						}
+						else
+						{
+							File.AppendAllText(Path, (JSONData + Environment.NewLine));
+						}
 
-                        // Dynamically update the JSON object -> List<String> YaraRuleMatches
-                        JObject obj = JObject.Parse(JSONData);
-                        ((JArray)obj["YaraMatch"]).Add(YaraRuleMatches);
-                        JSONData = obj.ToString(Newtonsoft.Json.Formatting.None);
-                    }
-                }
+						return 0;
+					}
+					catch
+					{
+						return 1;
+					}
 
-                if (YaraOptions == YaraOptions.All || YaraOptions == YaraOptions.None || (YaraScan != String.Empty && YaraRuleMatches.Count > 0))
-                {
-                    //--[Return Codes]
-                    // 0 == OK
-                    // 1 == File write failed
-                    // 2 == URL POST request failed
-                    // 3 == Eventlog write failed
-                    //--
+				}
+				else if (OutputType == OutputType.url)
+				{
+					try
+					{
+						string responseFromServer = string.Empty;
+						HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(Path);
+						webRequest.Timeout = 10000; // 10 second timeout
+						webRequest.Method = "POST";
+						webRequest.ContentType = "application/json";
+						webRequest.Accept = "application/json";
+						using (var streamWriter = new StreamWriter(webRequest.GetRequestStream()))
+						{
+							streamWriter.Write(JSONData);
+							streamWriter.Flush();
+							streamWriter.Close();
+						}
+						var httpResponse = (HttpWebResponse)webRequest.GetResponse();
+						using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
+						{
+							var result = streamReader.ReadToEnd();
+						}
 
-                    // Process JSON
-                    if (OutputType == OutputType.file)
-                    {
-                        try
-                        {
-                            if (!File.Exists(Path))
-                            {
-                                File.WriteAllText(Path, (JSONData + Environment.NewLine));
-                            }
-                            else
-                            {
-                                File.AppendAllText(Path, (JSONData + Environment.NewLine));
-                            }
+						return 0;
+					}
+					catch
+					{
+						return 2;
+					}
 
-                            return 0;
-                        }
-                        catch
-                        {
-                            return 1;
-                        }
+				}
+				else
+				{
+					Boolean WriteEvent = WriteEventLogEntry(JSONData, EventLogEntryType.Information, EventIds.Event, Path);
 
-                    }
-                    else if (OutputType == OutputType.url)
-                    {
-                        try
-                        {
-                            string responseFromServer = string.Empty;
-                            HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(Path);
-                            webRequest.Timeout = 10000; // 10 second timeout
-                            webRequest.Method = "POST";
-                            webRequest.ContentType = "application/json";
-                            webRequest.Accept = "application/json";
-                            using (var streamWriter = new StreamWriter(webRequest.GetRequestStream()))
-                            {
-                                streamWriter.Write(JSONData);
-                                streamWriter.Flush();
-                                streamWriter.Close();
-                            }
-                            var httpResponse = (HttpWebResponse)webRequest.GetResponse();
-                            using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
-                            {
-                                var result = streamReader.ReadToEnd();
-                            }
+					if (WriteEvent)
+					{
+						return 0;
+					}
+					else
+					{
+						return 3;
+					}
 
-                            return 0;
-                        }
-                        catch
-                        {
-                            return 2;
-                        }
-
-                    }
-                    else
-                    {
-                        Boolean WriteEvent = WriteEventLogEntry(JSONData, EventLogEntryType.Information, EventIds.Event, Path);
-
-                        if (WriteEvent)
-                        {
-                            return 0;
-                        }
-                        else
-                        {
-                            return 3;
-                        }
-
-                    }
-                }
-                else
-                {
-                    return 0;
-                }
+				}
             }
 
             // Local variables for StartTrace
@@ -248,7 +215,6 @@ namespace SilkService
 					var eRecord = new EventRecordStruct
 					{
 						ProviderGuid = data.ProviderGuid,
-						YaraMatch = new List<String>(),
 						ProviderName = data.ProviderName,
 						EventName = data.EventName,
 						Opcode = data.Opcode,
@@ -308,7 +274,7 @@ namespace SilkService
 
 					// Serialize to JSON
 					String JSONEventData = Newtonsoft.Json.JsonConvert.SerializeObject(eRecord);
-					int ProcessResult = ProcessJSONEventData(JSONEventData, Collector.OutputType, Collector.Path, Collector.YaraScan, Collector.YaraOptions, Collector.YaraInstance, Collector.YaraRules);
+					int ProcessResult = ProcessJSONEventData(JSONEventData, Collector.OutputType, Collector.Path);
 
 					// Verify that we processed the result successfully
 					if (ProcessResult != 0)
@@ -362,7 +328,7 @@ namespace SilkService
 				{
 					ConvertKeywords = "0x" + String.Format("{0:X}", (ulong)Collector.UserKeywords);
 				}
-				String Message = $"{{\"Collector\":\"Start\",\"Data\":{{\"Type\":\"{Collector.CollectorType}\",\"Provider\":\"{Collector.ProviderName}\",\"Keywords\":\"{ConvertKeywords}\",\"FilterOption\":\"{Collector.FilterOption}\",\"FilterValue\":\"{Collector.FilterValue}\",\"YaraPath\":\"{Collector.YaraScan}\",\"YaraOption\":\"{Collector.YaraOptions}\"}}}}";
+				String Message = $"{{\"Collector\":\"Start\",\"Data\":{{\"Type\":\"{Collector.CollectorType}\",\"Provider\":\"{Collector.ProviderName}\",\"Keywords\":\"{ConvertKeywords}\",\"FilterOption\":\"{Collector.FilterOption}\",\"FilterValue\":\"{Collector.FilterValue}\"}}}}";
 				WriteEventLogEntry(Message, EventLogEntryType.SuccessAudit, EventIds.Start, Collector.Path);
 			}
 
