@@ -1,12 +1,8 @@
-﻿using System;
-using System.IO;
-using Microsoft.Diagnostics.Tracing;
+﻿using Microsoft.Diagnostics.Tracing;
 using System.Collections;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using YaraSharp;
-using System.Collections.Generic;
-using System.Threading;
 
 namespace SilkService
 {
@@ -301,26 +297,22 @@ namespace SilkService
         {
             lock (LockServiceTextLog)
             {
-                String Path = AppDomain.CurrentDomain.BaseDirectory + "\\Logs";
-                if (!Directory.Exists(Path))
+                String path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs");
+                if (!Directory.Exists(path))
                 {
-                    Directory.CreateDirectory(Path);
+                    Directory.CreateDirectory(path);
                 }
-                String FilePath = AppDomain.CurrentDomain.BaseDirectory + "\\Logs\\ServiceLog_" + DateTime.Now.Date.ToShortDateString().Replace('/', '_') + ".txt";
+                String FilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs", "ServiceLog_" + DateTime.Now.Date.ToShortDateString().Replace('/', '_') + ".txt");
                 if (!File.Exists(FilePath))
                 {
-                    using (StreamWriter sw = File.CreateText(FilePath))
-                    {
-                        sw.WriteLine(Message);
-                    }
-                }
+					using StreamWriter sw = File.CreateText(FilePath);
+					sw.WriteLine(Message);
+				}
                 else
                 {
-                    using (StreamWriter sw = File.AppendText(FilePath))
-                    {
-                        sw.WriteLine(Message);
-                    }
-                }
+					using StreamWriter sw = File.AppendText(FilePath);
+					sw.WriteLine(Message);
+				}
             }
         }
 

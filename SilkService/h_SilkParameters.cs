@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Xml.Linq;
+﻿using System.Xml.Linq;
 using YaraSharp;
 
 namespace SilkService
@@ -352,14 +348,14 @@ namespace SilkService
                                 }
                             }
                             catch { }
-                            if (!(Directory.Exists(System.IO.Path.GetDirectoryName(Collector.Path))))
+                            if (!Directory.Exists(Path.GetDirectoryName(Collector.Path)))
                             {
                                 SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "Output path does not exist", true);
                                 return false;
                             }
                             else
                             {
-                                if (!(SilkUtility.DirectoryHasPermission(System.IO.Path.GetDirectoryName(Collector.Path), System.Security.AccessControl.FileSystemRights.Write)))
+                                if (!SilkUtility.DirectoryHasPermission(Path.GetDirectoryName(Collector.Path), System.Security.AccessControl.FileSystemRights.Write))
                                 {
                                     SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "No write access to output path", true);
                                     return false;
@@ -369,15 +365,14 @@ namespace SilkService
                     }
                     else if (Collector.OutputType == OutputType.url)
                     {
-                        if (String.IsNullOrEmpty(Collector.Path))
+                        if (string.IsNullOrEmpty(Collector.Path))
                         {
                             SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "No URL specified", true);
                             return false;
                         }
                         else
                         {
-                            Uri uriResult;
-                            bool UrlResult = Uri.TryCreate(Collector.Path, UriKind.Absolute, out uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
+                            bool UrlResult = Uri.TryCreate(Collector.Path, UriKind.Absolute, out var uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
                             if (!UrlResult)
                             {
                                 SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "Invalid URL specified", true);

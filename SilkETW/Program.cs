@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
+using System.Runtime.InteropServices;
 using McMaster.Extensions.CommandLineUtils;
 using YaraSharp;
 
@@ -62,6 +59,7 @@ namespace SilkETW
                 SilkUtility.PrintHelp();
                 return;
             }
+
             CommandLineApplication.Execute<Silk>(args);
         }
 
@@ -240,8 +238,8 @@ namespace SilkETW
                 }
             }
 
-            // Validate Yara folder path
-            if (YaraScan != String.Empty)
+            // // Validate Yara folder path
+            if (YaraScan != String.Empty && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 try
                 {
@@ -266,7 +264,7 @@ namespace SilkETW
                             SilkUtility.YaraCompiler = SilkUtility.YaraInstance.CompileFromFiles(YaraRuleCollection,null);
                             SilkUtility.YaraRules = SilkUtility.YaraCompiler.GetRules();
                             YSReport YaraReport = SilkUtility.YaraCompiler.GetErrors();
-                        
+
                             if (!(YaraReport.IsEmpty()))
                             {
                                 SilkUtility.ReturnStatusMessage("[!] The following yara errors were detected (-y|--yara)", ConsoleColor.Red);

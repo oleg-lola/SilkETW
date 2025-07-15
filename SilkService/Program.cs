@@ -1,25 +1,26 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.ServiceProcess;
-using System.Text;
-using System.Threading.Tasks;
+using System.Runtime.InteropServices;
 
-namespace SilkService
+var builder = Host.CreateDefaultBuilder(args);
+var isWindowsService = !args.Contains("console") && RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+
+builder.ConfigureServices((ctx, svc) =>
 {
-    static class Program
-    {
-        /// <summary>
-        /// The main entry point for the application.
-        /// </summary>
-        static void Main()
-        {
-            ServiceBase[] ServicesToRun;
-            ServicesToRun = new ServiceBase[]
-            {
-                new SilkService()
-            };
-            ServiceBase.Run(ServicesToRun);
-        }
-    }
+	svc.AddHostedService<SilkService.SilkService>();
+
+	if (isWindowsService)
+	{
+		svc.Configure<ConsoleLifetimeOptions>(o => o.SuppressStatusMessages = true);
+	}
+});
+
+if (isWindowsService)
+{
+	builder.UseWindowsService(o => o.ServiceName = "SilkService");
 }
+else
+{
+	builder.UseConsoleLifetime();
+}
+
+var host = builder.Build();
+host.Run();
