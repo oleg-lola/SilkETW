@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Xml.Linq;
-using YaraSharp;
+﻿using System.Xml.Linq;
 
 namespace SilkService
 {
@@ -14,7 +9,7 @@ namespace SilkService
         {
             // Load config
             String ConfigPath = AppDomain.CurrentDomain.BaseDirectory + "\\SilkServiceConfig.xml";
-            XElement XmlConfigFile = null;
+            XElement XmlConfigFile;
             try
             {
                 XmlConfigFile = XElement.Load(ConfigPath);
@@ -36,8 +31,6 @@ namespace SilkService
             XName UK = XName.Get("UserKeywords");
             XName FO = XName.Get("FilterOption");
             XName FV = XName.Get("FilterValue");
-            XName YS = XName.Get("YaraScan");
-            XName YO = XName.Get("YaraOptions");
 
             // Initialize result struct
             var CollectorParamInstance = new CollectorParameters();
@@ -216,39 +209,15 @@ namespace SilkService
                     {
                         CollectorParamInstance.FilterValue = String.Empty;
                     }
-                    try // (11) --> YaraScan
+                    try // (11) --> SysLogPath
                     {
-                        ParamContainer = Collector.Element(YS);
-                        if (!String.IsNullOrEmpty(ParamContainer.Value))
+                        ParamContainer = Collector.Element(XName.Get("SysLogPath"));
+                        if (!string.IsNullOrEmpty(ParamContainer.Value))
                         {
-                            CollectorParamInstance.YaraScan = ParamContainer.Value;
-                        }
-                        else
-                        {
-                            CollectorParamInstance.YaraScan = String.Empty;
+                            CollectorParamInstance.SysLogPath = ParamContainer.Value;
                         }
                     }
-                    catch
-                    {
-                        CollectorParamInstance.YaraScan = String.Empty;
-                    }
-                    try // (12) --> YaraOptions
-                    {
-                        ParamContainer = Collector.Element(YO);
-                        YaraOptions EnumContainer;
-                        if (Enum.TryParse(ParamContainer.Value, true, out EnumContainer))
-                        {
-                            CollectorParamInstance.YaraOptions = EnumContainer;
-                        }
-                        else
-                        {
-                            CollectorParamInstance.YaraOptions = YaraOptions.None;
-                        }
-                    }
-                    catch
-                    {
-                        CollectorParamInstance.YaraOptions = YaraOptions.None;
-                    }
+                    catch {}
 
                     // Add result to ouput object
                     SilkUtility.SilkServiceParameterSets.Add(CollectorParamInstance);
@@ -352,14 +321,14 @@ namespace SilkService
                                 }
                             }
                             catch { }
-                            if (!(Directory.Exists(System.IO.Path.GetDirectoryName(Collector.Path))))
+                            if (!Directory.Exists(Path.GetDirectoryName(Collector.Path)))
                             {
                                 SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "Output path does not exist", true);
                                 return false;
                             }
                             else
                             {
-                                if (!(SilkUtility.DirectoryHasPermission(System.IO.Path.GetDirectoryName(Collector.Path), System.Security.AccessControl.FileSystemRights.Write)))
+                                if (!SilkUtility.DirectoryHasPermission(Path.GetDirectoryName(Collector.Path), System.Security.AccessControl.FileSystemRights.Write))
                                 {
                                     SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "No write access to output path", true);
                                     return false;
@@ -369,15 +338,14 @@ namespace SilkService
                     }
                     else if (Collector.OutputType == OutputType.url)
                     {
-                        if (String.IsNullOrEmpty(Collector.Path))
+                        if (string.IsNullOrEmpty(Collector.Path))
                         {
                             SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "No URL specified", true);
                             return false;
                         }
                         else
                         {
-                            Uri uriResult;
-                            bool UrlResult = Uri.TryCreate(Collector.Path, UriKind.Absolute, out uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
+                            bool UrlResult = Uri.TryCreate(Collector.Path, UriKind.Absolute, out var uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
                             if (!UrlResult)
                             {
                                 SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "Invalid URL specified", true);
@@ -434,75 +402,7 @@ namespace SilkService
                         Collector.FilterValue = (String)Collector.FilterValue;
                     }
                 }
-
-                // Validate Yara folder path
-                if (Collector.YaraScan != String.Empty)
-                {
-                    try
-                    {
-                        FileAttributes CheckAttrib = File.GetAttributes(Collector.YaraScan);
-                        if (!(CheckAttrib.HasFlag(FileAttributes.Directory)))
-                        {
-                            SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "YaraScan path is not a directory", true);
-                            return false;
-                        }
-                        else
-                        {
-                            List<string> YaraRuleCollection = Directory.GetFiles(Collector.YaraScan, "*.yar", SearchOption.AllDirectories).ToList();
-                            if (YaraRuleCollection.Count == 0)
-                            {
-                                SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "YaraScan directory does not conatin any *.yar files", true);
-                                return false;
-                            }
-                            else
-                            {
-                                // We already initialize yara for performace,
-                                // new rules can not be added at runtime.
-                                Collector.YaraInstance = new YSInstance();
-                                Collector.YaraContext = new YSContext();
-                                Collector.YaraCompiler = Collector.YaraInstance.CompileFromFiles(YaraRuleCollection, null);
-                                Collector.YaraRules = Collector.YaraCompiler.GetRules();
-                                YSReport YaraReport = Collector.YaraCompiler.GetErrors();
-
-                                if (!(YaraReport.IsEmpty()))
-                                {
-                                    SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "The following yara errors were detected", true);
-
-                                    Dictionary<string, List<string>> Errors = YaraReport.Dump();
-                                    foreach (KeyValuePair<string, List<string>> Error in Errors)
-                                    {
-                                        SilkUtility.WriteToServiceTextLog("==> " + Error.Key);
-                                        foreach (String ErrorMsg in Error.Value)
-                                        {
-                                            SilkUtility.WriteToServiceTextLog("    + " + ErrorMsg);
-                                        }
-                                    }
-                                    return false;
-                                }
-
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "Invalid YaraScan folder path", true);
-                        return false;
-                    }
-
-                    if (Collector.YaraOptions == YaraOptions.None)
-                    {
-                        SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "Invalid YaraOptions specified", true);
-                        return false;
-                    }
-                }
-
-                // Overwrite list entry
-                Collectors[i] = Collector;
-
-                // We passed all collector parameter checks
-                SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "Parameter validation success", false);
             }
-
             // Validation complete
             return true;
         }

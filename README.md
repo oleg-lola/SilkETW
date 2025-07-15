@@ -1,5 +1,25 @@
 # SilkETW & SilkService
 
+## How to build this version
+
+As this version was ported to .NET 8 in order to build it make sure you have dotnet version 8 SDK installed. If you're using the latest Visual Studio you likely already have everything you need and you can skip the rest of this parapgraph. If not, go ahead and install dotnet 8 SDK. Once done, from your terminal
+
+```bash
+cd /path/to/the/source/code
+
+# To build CLI app:
+cd ./SilkETW
+dotnet publish SilkETW.csproj -c Release -r win-x64 --sc -o /your/output/destination/of/choice
+
+# Similarly to build the service version
+cd ./SilkService
+dotnet publish SilkService.csproj -c Release -r win-x64 --sc -o /output/directory
+
+# Then install the publish artifact as a service using sc.exe: sc create "Silk Service" binpath="path_to_the_binary"
+```
+
+---
+
 SilkETW & SilkService are flexible C# wrappers for ETW, they are meant to abstract away the complexities of ETW and give people a simple interface to perform research and introspection. While both projects have obvious defensive (and offensive) applications they should primarily be considered as research tools.
 
 For easy consumption, output data is serialized to JSON. The JSON data can either be written to file and analyzed locally using PowerShell, stored in the Windows eventlog or shipped off to 3rd party infrastructure such as [Elasticsearch](https://www.elastic.co/).
@@ -55,7 +75,7 @@ SilkService was created because a large number of people wanted to run SilkETW h
 After compiling or downloading the release package you can install the service by issuing the following command from an elevated prompt.
 
 ```
-sc create SillkService binPath= "C:\Path\To\SilkService.exe" start= demand
+sc create SillkService binPath= "C:\Path\To\SilkService.exe" start=demand
 ```
 
 ### Configuration
@@ -97,6 +117,16 @@ SilkService ingests an XML configuration file, "SilkServiceConfig.xml", which sh
 		<KernelKeywords>Process</KernelKeywords>
 		<OutputType>file</OutputType>
 		<Path>C:\Users\b33f\Desktop\kproc.json</Path>
+	</ETWCollector>
+
+	<!-- personal -->
+	<ETWCollector>
+		<Guid>21ac2393-3bbb-4702-a01c-b593e21913dc</Guid>
+		<CollectorType>user</CollectorType>
+		<ProviderName>Microsoft-Windows-DNSServer</ProviderName>
+		<OutputType>file</OutputType>
+		<Path>C:\Users\Administrator\Downloads\dns-server-logs-service.json</Path>
+		<SysLogPath>udp:logger.ews.lan:514</SysLogPath>
 	</ETWCollector>
 </SilkServiceConfig>
 ```
