@@ -10,6 +10,7 @@ using YaraSharp;
 using System.Collections.Generic;
 using System.Text;
 using Newtonsoft.Json.Linq;
+using System.Runtime.InteropServices;
 
 namespace SilkETW
 {
@@ -467,8 +468,8 @@ namespace SilkETW
 
         public static int ProcessJSONEventData(String JSONData, OutputType OutputType, String Path, String YaraScan, YaraOptions YaraOptions)
         {
-            // Yara options
-            if (YaraScan != String.Empty)
+            // // Yara options
+            if (YaraScan != String.Empty && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 byte[] JSONByteArray = Encoding.ASCII.GetBytes(JSONData);
                 List<YSMatches> Matches = SilkUtility.YaraInstance.ScanMemory(JSONByteArray, SilkUtility.YaraRules,null,0);
@@ -483,7 +484,7 @@ namespace SilkETW
                             SilkUtility.ReturnStatusMessage($"     -> Yara match: {Match.Rule.Identifier}", ConsoleColor.Magenta);
                         }
                     }
-
+            
                     // Dynamically update the JSON object -> List<String> YaraRuleMatches
                     JObject obj = JObject.Parse(JSONData);
                     ((JArray)obj["YaraMatch"]).Add(SilkUtility.YaraRuleMatches);

@@ -1,140 +1,130 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Linq;
-using System.ServiceProcess;
-using Microsoft.Diagnostics.Tracing.Session;
+﻿using Microsoft.Diagnostics.Tracing.Session;
 
-namespace SilkService
+namespace SilkService;
+
+public class SilkService : IHostedService
 {
-    public partial class SilkService : ServiceBase
-    {
-        public SilkService()
-        {
-            InitializeComponent();
-        }
+    private readonly List<Task> CollectorTasks = [];
 
-        protected override void OnStart(string[] args)
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        SilkUtility.WriteToServiceTextLog("[+] SilkService started at: " + DateTime.Now);
+        List<CollectorParameters> CollectorConfig = SilkParameters.ReadXmlConfig();
+        if (CollectorConfig.Count == 0)
         {
-            SilkUtility.WriteToServiceTextLog("[+] SilkService started at: " + DateTime.Now);
-            List<CollectorParameters> CollectorConfig = SilkParameters.ReadXmlConfig();
-            if (!CollectorConfig.Any())
+            // We didn't find any ETWCollector elements so we stop the service
+            // Logs in ServiceLog text file
+            return Task.CompletedTask;
+        }
+        else
+        {
+            bool IsSuccess = SilkParameters.ValidateCollectorParameters(CollectorConfig);
+            if (!IsSuccess)
             {
-                // We didn't find any ETWCollector elements so we stop the service
+                // There was an error in parsing the collector parameters so we stop the service
                 // Logs in ServiceLog text file
                 // Stop -> OnStop -> Change service state
-                Stop();
+                return Task.CompletedTask;
             }
             else
             {
-                Boolean IsSuccess = SilkParameters.ValidateCollectorParameters(CollectorConfig);
-                if (!IsSuccess)
+                // Check if the config has 1+ Kernel collectors
+                // Check if multiple collectors are writing to the same file
+                int KCCount = 0;
+                bool IsSamePath = false;
+                HashSet<string> CCPath = [];
+                for (int i = 0; i < CollectorConfig.Count; i++)
                 {
-                    // There was an error in parsing the collector parameters so we stop the service
-                    // Logs in ServiceLog text file
-                    // Stop -> OnStop -> Change service state
-                    Stop();
+                    if (CollectorConfig[i].CollectorType == CollectorType.Kernel)
+                    {
+                        KCCount += 1;
+                    }
+
+                    if (CollectorConfig[i].OutputType == OutputType.file)
+                    {
+                        if (!CCPath.Add(CollectorConfig[i].Path))
+                        {
+                            IsSamePath = true;
+                        }
+                    }
+                }
+
+                if (KCCount > 1 | IsSamePath)
+                {
+                    if (KCCount > 1)
+                    {
+                        SilkUtility.WriteToServiceTextLog("[!] SilkService can only support one Kernel collector..");
+                    }
+                    else
+                    {
+                        SilkUtility.WriteToServiceTextLog("[!] File based output paths must be unique..");
+                    }
+
+                    return Task.CompletedTask;
                 }
                 else
                 {
-                    // Check if the config has 1+ Kernel collectors
-                    // Check if multiple collectors are writing to the same file
-                    int KCCount = 0;
-                    Boolean IsSamePath = false;
-                    HashSet<String> CCPath = new HashSet<String>();
-                    for (int i = 0; i < CollectorConfig.Count; i++)
+                    // We spin up the collector threads
+                    SilkUtility.WriteToServiceTextLog("[*] Starting collector threads: " + DateTime.Now);
+                    foreach (CollectorParameters Collector in CollectorConfig)
                     {
-                        if (CollectorConfig[i].CollectorType == CollectorType.Kernel)
+                        // We create a thread for the collector
+                        CollectorTasks.Add(Task.Factory.StartNew(() =>
                         {
-                            KCCount += 1;
-                        }
-
-                        if (CollectorConfig[i].OutputType == OutputType.file)
-                        {
-                            if (!CCPath.Add(CollectorConfig[i].Path))
+                            try
                             {
-                                IsSamePath = true;
-                            }
-                        }
-                    }
-
-                    if (KCCount > 1 | IsSamePath)
-                    {
-                        if (KCCount > 1)
-                        {
-                            SilkUtility.WriteToServiceTextLog("[!] SilkService can only support one Kernel collector..");
-                        } else
-                        {
-                            SilkUtility.WriteToServiceTextLog("[!] File based output paths must be unique..");
-                        }
-                        
-                        Stop();
-                    } else
-                    {
-                        // We spin up the collector threads
-                        SilkUtility.WriteToServiceTextLog("[*] Starting collector threads: " + DateTime.Now);
-                        foreach (CollectorParameters Collector in CollectorConfig)
-                        {
-                            // We create a thread for the collector
-                            Thread CollectorThread = new Thread(() => {
-                                try
+                                SilkUtility.WriteToServiceTextLog("    [+] GUID:     " + Collector.CollectorGUID);
+                                SilkUtility.WriteToServiceTextLog("    [>] Type:     " + Collector.CollectorType);
+                                if (Collector.CollectorType == CollectorType.User)
                                 {
-                                    SilkUtility.WriteToServiceTextLog("    [+] GUID:     " + Collector.CollectorGUID);
-                                    SilkUtility.WriteToServiceTextLog("    [>] Type:     " + Collector.CollectorType);
-                                    if (Collector.CollectorType == CollectorType.User)
-                                    {
-                                        SilkUtility.WriteToServiceTextLog("    [>] Provider: " + Collector.ProviderName);
-                                    }
-                                    else
-                                    {
-                                        SilkUtility.WriteToServiceTextLog("    [>] Provider: " + Collector.KernelKeywords);
-                                    }
-                                    SilkUtility.WriteToServiceTextLog("    [>] Out Type: " + Collector.OutputType);
-                                    ETWCollector.StartTrace(Collector);
+                                    SilkUtility.WriteToServiceTextLog("    [>] Provider: " + Collector.ProviderName);
                                 }
-                                catch (Exception ex) { SilkUtility.WriteToServiceTextLog("[!] " + ex.ToString()); }
+                                else
+                                {
+                                    SilkUtility.WriteToServiceTextLog("    [>] Provider: " + Collector.KernelKeywords);
+                                }
+                                SilkUtility.WriteToServiceTextLog("    [>] Out Type: " + Collector.OutputType);
+                                ETWCollector.StartTrace(Collector);
+                            }
+                            catch (Exception ex) { SilkUtility.WriteToServiceTextLog("[!] " + ex.ToString()); throw; }
+                        }));
 
-                                // If any collectors terminate by internal error we stop the service
-                                Stop();
-                            });
-
-                            // We have to mark threads as background to ensure they exit in a timely fashion
-                            CollectorThread.IsBackground = false;
-                            // Start the collector thread
-                            CollectorThread.Start();
-
-                            // We wait for the thread to signal and then reset the event
-                            SilkUtility.SignalThreadStarted.WaitOne();
-                            SilkUtility.SignalThreadStarted.Reset();
-                        }
+                        // We wait for the thread to signal and then reset the event
+                        SilkUtility.SignalThreadStarted.WaitOne();
+                        SilkUtility.SignalThreadStarted.Reset();
                     }
                 }
             }
         }
+        return Task.CompletedTask;
+    }
 
-        protected override void OnStop()
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        // Check if any collector tasks are registered
+        if (SilkUtility.CollectorTaskList.Count != 0)
         {
-            // Guardrail for timeout
-            RequestAdditionalTime(5000);
-
-            // Check if any collector tasks are registered
-            if (SilkUtility.CollectorTaskList.Any())
+            // We pop terminated threads out of the list
+            foreach (CollectorInstance CollectorTask in SilkUtility.CollectorTaskList)
             {
-                // We pop terminated threads out of the list
-                foreach (CollectorInstance CollectorTask in SilkUtility.CollectorTaskList)
+                try
                 {
-                    try
-                    {
-                        CollectorTask.EventSource.StopProcessing();
-                        TraceEventSession.GetActiveSession(CollectorTask.EventParseSessionName).Dispose();
-                        SilkUtility.CollectorTaskList.Remove(CollectorTask);
-                        SilkUtility.WriteCollectorGuidMessageToServiceTextLog(CollectorTask.CollectorGUID, "Collector terminated", false);
-                    } catch { }
+                    CollectorTask.EventSource.StopProcessing();
+                    TraceEventSession.GetActiveSession(CollectorTask.EventParseSessionName).Dispose();
+                    SilkUtility.CollectorTaskList.Remove(CollectorTask);
+                    SilkUtility.WriteCollectorGuidMessageToServiceTextLog(CollectorTask.CollectorGUID, "Collector terminated", false);
                 }
+                catch { }
             }
-
-            // Write status to log
-            SilkUtility.WriteToServiceTextLog("[+] SilkService stopped at: " + DateTime.Now);
         }
+
+        // Write status to log
+        SilkUtility.WriteToServiceTextLog("[+] SilkService stopped at: " + DateTime.Now);
+
+        try
+        {
+            await Task.WhenAll();
+        }
+        catch { }
     }
 }
