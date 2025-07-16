@@ -1,16 +1,9 @@
-﻿using System;
-using System.IO;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Microsoft.Diagnostics.Tracing;
 using System.Collections;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Net;
-using YaraSharp;
-using System.Collections.Generic;
-using System.Text;
-using Newtonsoft.Json.Linq;
-using System.Runtime.InteropServices;
 
 namespace SilkETW
 {
@@ -37,13 +30,6 @@ namespace SilkETW
         ProcessID,
         ProcessName,
         Opcode
-    }
-
-    enum YaraOptions
-    {
-        None = 0,
-        All,
-        Matches
     }
 
     enum EventIds
@@ -246,7 +232,6 @@ namespace SilkETW
     public struct EventRecordStruct
     {
         public Guid ProviderGuid;
-        public List<String> YaraMatch;
         public string ProviderName;
         public string EventName;
         public TraceEventOpcode Opcode;
@@ -269,12 +254,6 @@ namespace SilkETW
         public static int CursorYPos = 0;
         public static Object FilterValueObject = null;
         public static Boolean ProcessEventData;
-        public static Boolean NoYaraRulesFound = false;
-        public static YSInstance YaraInstance;
-        public static YSContext YaraContext;
-        public static YSCompiler YaraCompiler;
-        public static YSRules YaraRules;
-        public static List<String> YaraRuleMatches = new List<String>();
         public static readonly object ConsoleWriterLock = new object();
 
         // Print logo
@@ -466,108 +445,78 @@ namespace SilkETW
             }
         }
 
-        public static int ProcessJSONEventData(String JSONData, OutputType OutputType, String Path, String YaraScan, YaraOptions YaraOptions)
+        public static int ProcessJSONEventData(String JSONData, OutputType OutputType, String Path)
         {
-            // // Yara options
-            if (YaraScan != String.Empty && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            //--[Return Codes]
+            // 0 == OK
+            // 1 == File write failed
+            // 2 == URL POST request failed
+            // 3 == Eventlog write failed
+            //--
+
+            // Process JSON
+            if (OutputType == OutputType.file)
             {
-                byte[] JSONByteArray = Encoding.ASCII.GetBytes(JSONData);
-                List<YSMatches> Matches = SilkUtility.YaraInstance.ScanMemory(JSONByteArray, SilkUtility.YaraRules,null,0);
-                SilkUtility.YaraRuleMatches.Clear();
-                if (Matches.Count != 0)
+                try
                 {
-                    foreach (YSMatches Match in Matches)
+                    if (!File.Exists(Path))
                     {
-                        SilkUtility.YaraRuleMatches.Add(Match.Rule.Identifier);
-                        lock (ConsoleWriterLock)
-                        {
-                            SilkUtility.ReturnStatusMessage($"     -> Yara match: {Match.Rule.Identifier}", ConsoleColor.Magenta);
-                        }
+                        File.WriteAllText(Path, (JSONData + Environment.NewLine));
                     }
-            
-                    // Dynamically update the JSON object -> List<String> YaraRuleMatches
-                    JObject obj = JObject.Parse(JSONData);
-                    ((JArray)obj["YaraMatch"]).Add(SilkUtility.YaraRuleMatches);
-                    JSONData = obj.ToString(Newtonsoft.Json.Formatting.None);
+                    else
+                    {
+                        File.AppendAllText(Path, (JSONData + Environment.NewLine));
+                    }
+
+                    return 0;
                 }
+                catch
+                {
+                    return 1;
+                }
+
             }
-
-            if (YaraOptions == YaraOptions.All || YaraOptions == YaraOptions.None || (YaraScan != String.Empty && SilkUtility.YaraRuleMatches.Count > 0))
+            else if (OutputType == OutputType.url)
             {
-                //--[Return Codes]
-                // 0 == OK
-                // 1 == File write failed
-                // 2 == URL POST request failed
-                // 3 == Eventlog write failed
-                //--
-
-                // Process JSON
-                if (OutputType == OutputType.file)
+                try
                 {
-                    try
+                    string responseFromServer = string.Empty;
+                    HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(Path);
+                    webRequest.Timeout = 10000; // 10 second timeout
+                    webRequest.Method = "POST";
+                    webRequest.ContentType = "application/json";
+                    webRequest.Accept = "application/json";
+                    using (var streamWriter = new StreamWriter(webRequest.GetRequestStream()))
                     {
-                        if (!File.Exists(Path))
-                        {
-                            File.WriteAllText(Path, (JSONData + Environment.NewLine));
-                        }
-                        else
-                        {
-                            File.AppendAllText(Path, (JSONData + Environment.NewLine));
-                        }
-
-                        return 0;
+                        streamWriter.Write(JSONData);
+                        streamWriter.Flush();
+                        streamWriter.Close();
                     }
-                    catch
+                    var httpResponse = (HttpWebResponse)webRequest.GetResponse();
+                    using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
                     {
-                        return 1;
+                        var result = streamReader.ReadToEnd();
                     }
 
+                    return 0;
                 }
-                else if (OutputType == OutputType.url)
+                catch
                 {
-                    try
-                    {
-                        string responseFromServer = string.Empty;
-                        HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(Path);
-                        webRequest.Timeout = 10000; // 10 second timeout
-                        webRequest.Method = "POST";
-                        webRequest.ContentType = "application/json";
-                        webRequest.Accept = "application/json";
-                        using (var streamWriter = new StreamWriter(webRequest.GetRequestStream()))
-                        {
-                            streamWriter.Write(JSONData);
-                            streamWriter.Flush();
-                            streamWriter.Close();
-                        }
-                        var httpResponse = (HttpWebResponse)webRequest.GetResponse();
-                        using (var streamReader = new StreamReader(httpResponse.GetResponseStream()))
-                        {
-                            var result = streamReader.ReadToEnd();
-                        }
-
-                        return 0;
-                    }
-                    catch
-                    {
-                        return 2;
-                    }
-
+                    return 2;
                 }
-                else
-                {
-                    Boolean WriteEvent = WriteEventLogEntry(JSONData, EventLogEntryType.Information, EventIds.Event, Path);
-                    if (WriteEvent)
-                    {
-                        return 0;
-                    } else
-                    {
-                        return 3;
-                    }
-                    
-                }
-            } else
+
+            }
+            else
             {
-                return 0;
+                Boolean WriteEvent = WriteEventLogEntry(JSONData, EventLogEntryType.Information, EventIds.Event, Path);
+                if (WriteEvent)
+                {
+                    return 0;
+                } else
+                {
+                    return 3;
+                }
+                
             }
         }
 

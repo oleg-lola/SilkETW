@@ -1,5 +1,4 @@
 ﻿using System.Xml.Linq;
-using YaraSharp;
 
 namespace SilkService
 {
@@ -32,8 +31,6 @@ namespace SilkService
             XName UK = XName.Get("UserKeywords");
             XName FO = XName.Get("FilterOption");
             XName FV = XName.Get("FilterValue");
-            XName YS = XName.Get("YaraScan");
-            XName YO = XName.Get("YaraOptions");
 
             // Initialize result struct
             var CollectorParamInstance = new CollectorParameters();
@@ -211,39 +208,6 @@ namespace SilkService
                     catch
                     {
                         CollectorParamInstance.FilterValue = String.Empty;
-                    }
-                    try // (11) --> YaraScan
-                    {
-                        ParamContainer = Collector.Element(YS);
-                        if (!String.IsNullOrEmpty(ParamContainer.Value))
-                        {
-                            CollectorParamInstance.YaraScan = ParamContainer.Value;
-                        }
-                        else
-                        {
-                            CollectorParamInstance.YaraScan = String.Empty;
-                        }
-                    }
-                    catch
-                    {
-                        CollectorParamInstance.YaraScan = String.Empty;
-                    }
-                    try // (12) --> YaraOptions
-                    {
-                        ParamContainer = Collector.Element(YO);
-                        YaraOptions EnumContainer;
-                        if (Enum.TryParse(ParamContainer.Value, true, out EnumContainer))
-                        {
-                            CollectorParamInstance.YaraOptions = EnumContainer;
-                        }
-                        else
-                        {
-                            CollectorParamInstance.YaraOptions = YaraOptions.None;
-                        }
-                    }
-                    catch
-                    {
-                        CollectorParamInstance.YaraOptions = YaraOptions.None;
                     }
 
                     // Add result to ouput object
@@ -429,75 +393,7 @@ namespace SilkService
                         Collector.FilterValue = (String)Collector.FilterValue;
                     }
                 }
-
-                // Validate Yara folder path
-                if (Collector.YaraScan != String.Empty)
-                {
-                    try
-                    {
-                        FileAttributes CheckAttrib = File.GetAttributes(Collector.YaraScan);
-                        if (!(CheckAttrib.HasFlag(FileAttributes.Directory)))
-                        {
-                            SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "YaraScan path is not a directory", true);
-                            return false;
-                        }
-                        else
-                        {
-                            List<string> YaraRuleCollection = Directory.GetFiles(Collector.YaraScan, "*.yar", SearchOption.AllDirectories).ToList();
-                            if (YaraRuleCollection.Count == 0)
-                            {
-                                SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "YaraScan directory does not conatin any *.yar files", true);
-                                return false;
-                            }
-                            else
-                            {
-                                // We already initialize yara for performace,
-                                // new rules can not be added at runtime.
-                                Collector.YaraInstance = new YSInstance();
-                                Collector.YaraContext = new YSContext();
-                                Collector.YaraCompiler = Collector.YaraInstance.CompileFromFiles(YaraRuleCollection, null);
-                                Collector.YaraRules = Collector.YaraCompiler.GetRules();
-                                YSReport YaraReport = Collector.YaraCompiler.GetErrors();
-
-                                if (!(YaraReport.IsEmpty()))
-                                {
-                                    SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "The following yara errors were detected", true);
-
-                                    Dictionary<string, List<string>> Errors = YaraReport.Dump();
-                                    foreach (KeyValuePair<string, List<string>> Error in Errors)
-                                    {
-                                        SilkUtility.WriteToServiceTextLog("==> " + Error.Key);
-                                        foreach (String ErrorMsg in Error.Value)
-                                        {
-                                            SilkUtility.WriteToServiceTextLog("    + " + ErrorMsg);
-                                        }
-                                    }
-                                    return false;
-                                }
-
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "Invalid YaraScan folder path", true);
-                        return false;
-                    }
-
-                    if (Collector.YaraOptions == YaraOptions.None)
-                    {
-                        SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "Invalid YaraOptions specified", true);
-                        return false;
-                    }
-                }
-
-                // Overwrite list entry
-                Collectors[i] = Collector;
-
-                // We passed all collector parameter checks
-                SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "Parameter validation success", false);
             }
-
             // Validation complete
             return true;
         }
