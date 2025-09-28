@@ -245,6 +245,23 @@ namespace SilkETW
         public Hashtable XmlEventData;
     }
 
+// TimeStamp=2025-09-09T12:22:56.2323467+03:00
+// InterfaceIP=10.1.2.46 (ServerIP)
+// Source=10.1.3.5       (ClientIP)
+// QNAME=hello.ews.test.
+// ProcessName=dns
+// LookupType=QUERY_RECEIVED
+    public struct DnsServerRecord
+    {
+        public string EventName;
+        public DateTime Timestamp;
+        public string InterfaceIp;
+        public string SourceIp;
+        public string Qname;
+        public string ProcessName;
+        public string LookupType;
+    }
+
     class SilkUtility
     {
         // Global var's

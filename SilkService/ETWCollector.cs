@@ -6,65 +6,65 @@ using System.Xml;
 using System.Collections;
 using System.Net;
 
-namespace SilkService
+namespace SilkService;
+
+class ETWCollector
 {
-    class ETWCollector
+    public static void StartTrace(CollectorParameters Collector)
     {
-        public static void StartTrace(CollectorParameters Collector)
+        void RetargetEventSource(String LegacySource)
         {
-            void RetargetEventSource(String LegacySource)
+            // This is a fix for: https://github.com/fireeye/SilkETW/issues/4
+            // When both SilkETW and SilkService are used on the same host
+            // eventlog logging would fail for one or the other as they had
+            // the same source. This function will retarget the source.
+            if (EventLog.SourceExists(LegacySource))
             {
-                // This is a fix for: https://github.com/fireeye/SilkETW/issues/4
-                // When both SilkETW and SilkService are used on the same host
-                // eventlog logging would fail for one or the other as they had
-                // the same source. This function will retarget the source.
-                if (EventLog.SourceExists(LegacySource))
-                {
-                    EventLog.DeleteEventSource(LegacySource);
-                }
+                EventLog.DeleteEventSource(LegacySource);
             }
+        }
 
-            Boolean WriteEventLogEntry(String Message, EventLogEntryType Type, EventIds EventId, String Path)
+        Boolean WriteEventLogEntry(String Message, EventLogEntryType Type, EventIds EventId, String Path)
+        {
+            //--[Event ID's]
+            // 0 == Collector start
+            // 1 == Collector terminated -> by user
+            // 2 == Collector terminated -> by error
+            // 3 == Event recorded
+            //--
+
+            try
             {
-                //--[Event ID's]
-                // 0 == Collector start
-                // 1 == Collector terminated -> by user
-                // 2 == Collector terminated -> by error
-                // 3 == Event recorded
-                //--
+                // Fix legacy collector source
+                RetargetEventSource("ETW Collector");
 
-                try
+                // Event log properties
+                String Source = "SilkService Collector";
+
+                // If the source doesn't exist we have to create it first
+                if (!EventLog.SourceExists(Source))
                 {
-                    // Fix legacy collector source
-                    RetargetEventSource("ETW Collector");
-
-                    // Event log properties
-                    String Source = "SilkService Collector";
-
-                    // If the source doesn't exist we have to create it first
-                    if (!EventLog.SourceExists(Source))
-                    {
-                        EventLog.CreateEventSource(Source, Path);
-                    }
-
-                    // Write event
-                    using (EventLog Log = new EventLog(Path))
-                    {
-                        Log.Source = Source;
-                        Log.MaximumKilobytes = 99968; // Max ~100mb size -> needs 64kb increments
-                        Log.ModifyOverflowPolicy(OverflowAction.OverwriteAsNeeded, 10); // Always overwrite oldest
-                        Log.WriteEntry(Message, Type, (int)EventId);
-                    }
-                    return true;
+                    EventLog.CreateEventSource(Source, Path);
                 }
-                catch
+
+                // Write event
+                using (EventLog Log = new EventLog(Path))
                 {
-                    return false;
+                    Log.Source = Source;
+                    Log.MaximumKilobytes = 99968; // Max ~100mb size -> needs 64kb increments
+                    Log.ModifyOverflowPolicy(OverflowAction.OverwriteAsNeeded, 10); // Always overwrite oldest
+                    Log.WriteEntry(Message, Type, (int)EventId);
                 }
+                return true;
             }
-
-            int ProcessJSONEventData(String JSONData, OutputType OutputType, String Path)
+            catch
             {
+                return false;
+            }
+        }
+
+        int ProcessJSONEventData(String JSONData, OutputType OutputType, String Path)
+        {
 				//--[Return Codes]
 				// 0 == OK
 				// 1 == File write failed
@@ -138,34 +138,34 @@ namespace SilkService
 					}
 
 				}
-            }
+        }
 
-            // Local variables for StartTrace
-            String EventParseSessionName;
-            Boolean ProcessEventData;
+        // Local variables for StartTrace
+        String EventParseSessionName;
+        Boolean ProcessEventData;
 
-            // Is elevated? While running as a service this should always be true but
-            // this is kept for edge-case user-fail.
-            if (TraceEventSession.IsElevated() != true)
-            {
-                SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "The collector must be run elevated", true);
-                return;
-            }
+        // Is elevated? While running as a service this should always be true but
+        // this is kept for edge-case user-fail.
+        if (TraceEventSession.IsElevated() != true)
+        {
+            SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "The collector must be run elevated", true);
+            return;
+        }
 
-            // Print status
-            SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "Starting trace collector", false);
+        // Print status
+        SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "Starting trace collector", false);
 
-            // We tag event sessions with a unique name
-            // While running these are observable with => logman -ets
-            if (Collector.CollectorType == CollectorType.Kernel)
-            {
-                EventParseSessionName = KernelTraceEventParser.KernelSessionName;
-            }
-            else
-            {
-                String RandId = Guid.NewGuid().ToString();
-                EventParseSessionName = ("SilkServiceUserCollector_" + RandId);
-            }
+        // We tag event sessions with a unique name
+        // While running these are observable with => logman -ets
+        if (Collector.CollectorType == CollectorType.Kernel)
+        {
+            EventParseSessionName = KernelTraceEventParser.KernelSessionName;
+        }
+        else
+        {
+            String RandId = Guid.NewGuid().ToString();
+            EventParseSessionName = ("SilkServiceUserCollector_" + RandId);
+        }
 
 			// Create trace session
 			using var TraceSession = new TraceEventSession(EventParseSessionName);
@@ -355,5 +355,4 @@ namespace SilkService
 				return;
 			}
 		}
-    }
 }
