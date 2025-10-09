@@ -251,16 +251,6 @@ namespace SilkETW
 // QNAME=hello.ews.test.
 // ProcessName=dns
 // LookupType=QUERY_RECEIVED
-    public struct DnsServerRecord
-    {
-        public string EventName;
-        public DateTime Timestamp;
-        public string InterfaceIp;
-        public string SourceIp;
-        public string Qname;
-        public string ProcessName;
-        public string LookupType;
-    }
 
     class SilkUtility
     {
