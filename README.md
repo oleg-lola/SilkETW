@@ -75,7 +75,7 @@ SilkService was created because a large number of people wanted to run SilkETW h
 After compiling or downloading the release package you can install the service by issuing the following command from an elevated prompt.
 
 ```
-sc create SillkService binPath= "C:\Path\To\SilkService.exe" start= demand
+sc create SillkService binPath= "C:\Path\To\SilkService.exe" start=demand
 ```
 
 ### Configuration
@@ -117,6 +117,16 @@ SilkService ingests an XML configuration file, "SilkServiceConfig.xml", which sh
 		<KernelKeywords>Process</KernelKeywords>
 		<OutputType>file</OutputType>
 		<Path>C:\Users\b33f\Desktop\kproc.json</Path>
+	</ETWCollector>
+
+	<!-- personal -->
+	<ETWCollector>
+		<Guid>21ac2393-3bbb-4702-a01c-b593e21913dc</Guid>
+		<CollectorType>user</CollectorType>
+		<ProviderName>Microsoft-Windows-DNSServer</ProviderName>
+		<OutputType>file</OutputType>
+		<Path>C:\Users\Administrator\Downloads\dns-server-logs-service.json</Path>
+		<SysLogPath>udp:logger.ews.lan:514</SysLogPath>
 	</ETWCollector>
 </SilkServiceConfig>
 ```

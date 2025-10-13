@@ -9,7 +9,7 @@ namespace SilkService
         {
             // Load config
             String ConfigPath = AppDomain.CurrentDomain.BaseDirectory + "\\SilkServiceConfig.xml";
-            XElement XmlConfigFile = null;
+            XElement XmlConfigFile;
             try
             {
                 XmlConfigFile = XElement.Load(ConfigPath);
@@ -209,6 +209,15 @@ namespace SilkService
                     {
                         CollectorParamInstance.FilterValue = String.Empty;
                     }
+                    try // (11) --> SysLogPath
+                    {
+                        ParamContainer = Collector.Element(XName.Get("SysLogPath"));
+                        if (!string.IsNullOrEmpty(ParamContainer.Value))
+                        {
+                            CollectorParamInstance.SysLogPath = ParamContainer.Value;
+                        }
+                    }
+                    catch {}
 
                     // Add result to ouput object
                     SilkUtility.SilkServiceParameterSets.Add(CollectorParamInstance);

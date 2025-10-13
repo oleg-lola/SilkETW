@@ -10,7 +10,7 @@ namespace SilkService;
 
 class ETWCollector
 {
-	public static void StartTrace(CollectorParameters Collector)
+	public static void StartTrace(CollectorParameters collector)
 	{
 		// Local variables for StartTrace
 		String EventParseSessionName;
@@ -19,16 +19,16 @@ class ETWCollector
 		// this is kept for edge-case user-fail.
 		if (TraceEventSession.IsElevated() != true)
 		{
-			SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "The collector must be run elevated", true);
+			SilkUtility.WriteCollectorGuidMessageToServiceTextLog(collector.CollectorGUID, "The collector must be run elevated", true);
 			return;
 		}
 
 		// Print status
-		SilkUtility.WriteCollectorGuidMessageToServiceTextLog(Collector.CollectorGUID, "Starting trace collector", false);
+		SilkUtility.WriteCollectorGuidMessageToServiceTextLog(collector.CollectorGUID, "Starting trace collector", false);
 
 		// We tag event sessions with a unique name
 		// While running these are observable with => logman -ets
-		if (Collector.CollectorType == CollectorType.Kernel)
+		if (collector.CollectorType == CollectorType.Kernel)
 		{
 			EventParseSessionName = KernelTraceEventParser.KernelSessionName;
 		}
@@ -48,41 +48,46 @@ class ETWCollector
 		// A DynamicTraceEventParser can understand how to read the embedded manifests that occur in the dataStream
 		var EventParser = new DynamicTraceEventParser(EventSource);
 
+		// _syslogClient = new SysLogClient("logger.ews.lan", 514);
+		// var sysLogParts = collector.SysLogPath.Split(':');
+		// _syslogClient = new SysLogClient(sysLogParts[1], Convert.ToInt32(sysLogParts[2]));
+
 		// Loop events as they arrive
-		EventParser.All += HandleEvent(Collector, TraceSession, EventSource);
+		EventParser.All += HandleEvent(collector, TraceSession, EventSource);
 
 		// Specify the providers details
-		if (Collector.CollectorType == CollectorType.Kernel)
+		if (collector.CollectorType == CollectorType.Kernel)
 		{
-			TraceSession.EnableKernelProvider((KernelTraceEventParser.Keywords)Collector.KernelKeywords);
+			TraceSession.EnableKernelProvider((KernelTraceEventParser.Keywords)collector.KernelKeywords);
 		}
 		else
 		{
 			// Note that the collector doesn't know if you specified a wrong provider name,
 			// the only tell is that you won't get any events ;)
-			TraceSession.EnableProvider(Collector.ProviderName, (TraceEventLevel)Collector.UserTraceEventLevel, (ulong)Collector.UserKeywords);
+			ulong.TryParse(collector.UserKeywords.ToString(), System.Globalization.NumberStyles.HexNumber, null, out ulong userKeywords);
+			TraceSession.EnableProvider(collector.ProviderName, (TraceEventLevel)collector.UserTraceEventLevel, userKeywords);
 		}
 
 		// Write status to eventlog if dictated by the output type
-		if (Collector.OutputType == OutputType.eventlog)
+		if (collector.OutputType == OutputType.eventlog)
 		{
 			String ConvertKeywords;
-			if (Collector.CollectorType == CollectorType.Kernel)
+			if (collector.CollectorType == CollectorType.Kernel)
 			{
-				ConvertKeywords = Enum.GetName(typeof(KernelTraceEventParser.Keywords), Collector.KernelKeywords);
+				ConvertKeywords = Enum.GetName(typeof(KernelTraceEventParser.Keywords), collector.KernelKeywords);
 			}
 			else
 			{
-				ConvertKeywords = "0x" + String.Format("{0:X}", (ulong)Collector.UserKeywords);
+				ConvertKeywords = "0x" + String.Format("{0:X}", (ulong)collector.UserKeywords);
 			}
-			String Message = $"{{\"Collector\":\"Start\",\"Data\":{{\"Type\":\"{Collector.CollectorType}\",\"Provider\":\"{Collector.ProviderName}\",\"Keywords\":\"{ConvertKeywords}\",\"FilterOption\":\"{Collector.FilterOption}\",\"FilterValue\":\"{Collector.FilterValue}\"}}}}";
-			WriteEventLogEntry(Message, EventLogEntryType.SuccessAudit, EventIds.Start, Collector.Path);
+			String Message = $"{{\"Collector\":\"Start\",\"Data\":{{\"Type\":\"{collector.CollectorType}\",\"Provider\":\"{collector.ProviderName}\",\"Keywords\":\"{ConvertKeywords}\",\"FilterOption\":\"{collector.FilterOption}\",\"FilterValue\":\"{collector.FilterValue}\"}}}}";
+			WriteEventLogEntry(Message, EventLogEntryType.SuccessAudit, EventIds.Start, collector.Path);
 		}
 
 		// Populate the trace bookkeeper
 		var CollectorInstance = new CollectorInstance
 		{
-			CollectorGUID = Collector.CollectorGUID,
+			CollectorGUID = collector.CollectorGUID,
 			EventSource = EventSource,
 			EventParseSessionName = EventParseSessionName,
 		};
@@ -193,25 +198,28 @@ class ETWCollector
 				}
 				eRecord.XmlEventData = EventProperties;
 
-                string jsonRecord = "";
-                if (collector.ProviderName == "Microsoft-Windows-DNSServer")
-                {
-                    var (dnsRecord, err) = RecordsMapper.MapDnsServerRecord(eRecord);
-                    if (err != "") {
+				string jsonRecord = "";
+				if (collector.ProviderName == "Microsoft-Windows-DNSServer")
+				{
+					var (dnsRecord, err) = RecordsMapper.MapDnsServerRecord(eRecord);
+					if (err != "")
+					{
 						SilkUtility.WriteCollectorGuidMessageToServiceTextLog(collector.CollectorGUID, err, true);
 						return;
 					}
 
-                    if (dnsRecord.LookupType != "QUERY_RECEIVED") return;
+					if (dnsRecord.LookupType != "QUERY_RECEIVED") return;
 
-                    jsonRecord = Newtonsoft.Json.JsonConvert.SerializeObject(dnsRecord);
-                }
+					jsonRecord = Newtonsoft.Json.JsonConvert.SerializeObject(dnsRecord);
+				}
 
 				// Serialize to JSON
-                String JSONEventData = jsonRecord == ""
-                    ? Newtonsoft.Json.JsonConvert.SerializeObject(eRecord)
-                    : jsonRecord;
+				String JSONEventData = jsonRecord == ""
+					? Newtonsoft.Json.JsonConvert.SerializeObject(eRecord)
+					: jsonRecord;
 
+				var syslog = new SysLogClient("logger.ews.lan", 514);
+				
 				int ProcessResult = ProcessJSONEventData(JSONEventData, collector.OutputType, collector.Path);
 
 				// Verify that we processed the result successfully
@@ -266,13 +274,16 @@ class ETWCollector
 					File.AppendAllText(Path, (JSONData + Environment.NewLine));
 				}
 
+				var syslog = new SysLogClient("logger.ews.lan", 514);
+				syslog.Send(JSONData, "SilkETWService", facility: 1, severity: 6);
+				syslog.Close();
+
 				return 0;
 			}
 			catch
 			{
 				return 1;
 			}
-
 		}
 		else if (OutputType == OutputType.url)
 		{
@@ -320,9 +331,6 @@ class ETWCollector
 
 		// check if syslog enabled
 		// todo: get host/port from config
-		// var syslog = new SyslogClient("logger.ews.lan", 514);
-		// syslog.Send("Application started", "MyApp", facility: 1, severity: 6);
-		// syslog.Close();
 	}
 
 	static void RetargetEventSource(String LegacySource)

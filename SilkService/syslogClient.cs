@@ -5,13 +5,13 @@ using System.Text;
 
 namespace SilkService;
 
-public class SyslogClient
+public class SysLogClient
 {
     private readonly string _host;
     private readonly int _port;
     private readonly UdpClient _udpClient;
 
-    public SyslogClient(string host, int port = 514)
+    public SysLogClient(string host, int port = 514)
     {
         _host = host;
         _port = port;
@@ -24,7 +24,7 @@ public class SyslogClient
         {
             // Syslog PRI = (facility * 8) + severity
             int pri = (facility * 8) + severity;
-            string timestamp = DateTime.UtcNow.ToString("MMM dd HH:mm:ss");
+            string timestamp = DateTime.UtcNow.ToString();
             string hostname = Dns.GetHostName();
 
             string syslogMessage = $"<{pri}>{timestamp} {hostname} {appName}: {message}";

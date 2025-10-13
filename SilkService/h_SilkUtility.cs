@@ -251,6 +251,7 @@ namespace SilkService
         public KernelKeywords KernelKeywords;
         public OutputType OutputType;
         public String Path;
+        public string SysLogPath;
         public String ProviderName;
         public UserTraceEventLevel UserTraceEventLevel;
         public Object UserKeywords;
@@ -290,14 +291,14 @@ namespace SilkService
                 String FilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs", "ServiceLog_" + DateTime.Now.Date.ToShortDateString().Replace('/', '_') + ".txt");
                 if (!File.Exists(FilePath))
                 {
-					using StreamWriter sw = File.CreateText(FilePath);
-					sw.WriteLine(Message);
-				}
+                    using StreamWriter sw = File.CreateText(FilePath);
+                    sw.WriteLine(Message);
+                }
                 else
                 {
-					using StreamWriter sw = File.AppendText(FilePath);
-					sw.WriteLine(Message);
-				}
+                    using StreamWriter sw = File.AppendText(FilePath);
+                    sw.WriteLine(Message);
+                }
             }
         }
 
