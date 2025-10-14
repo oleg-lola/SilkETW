@@ -1,13 +1,13 @@
-﻿using System.Diagnostics;
-using Microsoft.Diagnostics.Tracing.Session;
+﻿using Microsoft.Diagnostics.Tracing.Session;
+using SyslogNet.Client.Transport;
 
 namespace SilkService;
 
 public class SilkService : IHostedService
 {
     private readonly List<Task> CollectorTasks = [];
-    private SysLogClient _syslogClient;
-
+    // private SysLogClient _sysLogClient;
+    private ISyslogMessageSender _sysLogClient;
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
@@ -68,8 +68,8 @@ public class SilkService : IHostedService
 
         var cc = CollectorConfig.First(c => !string.IsNullOrEmpty(c.SysLogPath));
         var sysLogParts = cc.SysLogPath.Split(':');
-        _syslogClient = new SysLogClient(sysLogParts[1], Convert.ToInt32(sysLogParts[2]));
-        // _sysLogClient = new SysLogClient("logger.ews.lan", 514);
+        // _sysLogClient = new SysLogClient(sysLogParts[1], Convert.ToInt32(sysLogParts[2]));
+        _sysLogClient = new SyslogUdpSender(sysLogParts[1], Convert.ToInt32(sysLogParts[2]));
 
         // We spin up the collector threads
         SilkUtility.WriteToServiceTextLog("[*] Starting collector threads: " + DateTime.Now);
@@ -91,7 +91,7 @@ public class SilkService : IHostedService
                         SilkUtility.WriteToServiceTextLog("    [>] Provider: " + Collector.KernelKeywords);
                     }
                     SilkUtility.WriteToServiceTextLog("    [>] Out Type: " + Collector.OutputType);
-                    ETWCollector.StartTrace(Collector);
+                    ETWCollector.StartTrace(Collector, _sysLogClient);
                 }
                 catch (Exception ex) { SilkUtility.WriteToServiceTextLog("[!] " + ex.ToString()); throw; }
             }));
@@ -105,7 +105,7 @@ public class SilkService : IHostedService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        _syslogClient.Close();
+        _sysLogClient.Dispose();
         // Check if any collector tasks are registered
         if (SilkUtility.CollectorTaskList.Count != 0)
         {

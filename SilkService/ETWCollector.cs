@@ -5,13 +5,19 @@ using Microsoft.Diagnostics.Tracing.Parsers;
 using System.Xml;
 using System.Collections;
 using System.Net;
+using SyslogNet.Client.Transport;
+using SyslogNet.Client.Serialization;
 
 namespace SilkService;
 
 class ETWCollector
 {
-	public static void StartTrace(CollectorParameters collector)
+	private static ISyslogMessageSender _sysLogClient;
+
+	public static void StartTrace(CollectorParameters collector, ISyslogMessageSender sysLogClient)
 	{
+		_sysLogClient = sysLogClient;
+
 		// Local variables for StartTrace
 		String EventParseSessionName;
 
@@ -210,16 +216,33 @@ class ETWCollector
 
 					if (dnsRecord.LookupType != "QUERY_RECEIVED") return;
 
+					// query: oleh-test1.ews.test IN AAAA (10.1.3.5) 
+					// meta: {"EventName":"LOOK_UP","InterfaceIp":"10.1.2.46","SourceIp":"10.1.3.5","Qname":"oleh-test1.ews.test.","LookupType":"QUERY_RECEIVED"}
 					jsonRecord = Newtonsoft.Json.JsonConvert.SerializeObject(dnsRecord);
+
+					var msg = $"query: {dnsRecord.Qname} {RecordsMapper.GetQueryTypeName(dnsRecord.Qtype)} ({dnsRecord.SourceIp})";
+					// _sysLogClient.Send(msg, "SilkETWService", facility: 1, severity: 6);
+
+					var meta = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonRecord);
+					var sde = new SyslogNet.Client.StructuredDataElement("meta", meta);
+
+					var syslogMessage = new SyslogNet.Client.SyslogMessage(
+						DateTimeOffset.Now,
+						SyslogNet.Client.Facility.UserLevelMessages,
+						SyslogNet.Client.Severity.Informational,
+						Dns.GetHostName(),
+						"SilkETWService",
+						"", "", msg, sde
+					);
+					var serializer = new SyslogRfc5424MessageSerializer();
+					_sysLogClient.Send(syslogMessage, serializer);
 				}
 
 				// Serialize to JSON
-				String JSONEventData = jsonRecord == ""
+				string JSONEventData = jsonRecord == ""
 					? Newtonsoft.Json.JsonConvert.SerializeObject(eRecord)
 					: jsonRecord;
 
-				var syslog = new SysLogClient("logger.ews.lan", 514);
-				
 				int ProcessResult = ProcessJSONEventData(JSONEventData, collector.OutputType, collector.Path);
 
 				// Verify that we processed the result successfully
@@ -273,10 +296,6 @@ class ETWCollector
 				{
 					File.AppendAllText(Path, (JSONData + Environment.NewLine));
 				}
-
-				var syslog = new SysLogClient("logger.ews.lan", 514);
-				syslog.Send(JSONData, "SilkETWService", facility: 1, severity: 6);
-				syslog.Close();
 
 				return 0;
 			}
