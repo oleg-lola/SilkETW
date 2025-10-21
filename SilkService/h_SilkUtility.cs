@@ -18,7 +18,8 @@ namespace SilkService
         None = 0,
         url,
         file,
-        eventlog
+        eventlog,
+        syslog
     }
 
     public enum FilterOption

@@ -54,10 +54,6 @@ class ETWCollector
 		// A DynamicTraceEventParser can understand how to read the embedded manifests that occur in the dataStream
 		var EventParser = new DynamicTraceEventParser(EventSource);
 
-		// _syslogClient = new SysLogClient("logger.ews.lan", 514);
-		// var sysLogParts = collector.SysLogPath.Split(':');
-		// _syslogClient = new SysLogClient(sysLogParts[1], Convert.ToInt32(sysLogParts[2]));
-
 		// Loop events as they arrive
 		EventParser.All += HandleEvent(collector, TraceSession, EventSource);
 
@@ -204,7 +200,7 @@ class ETWCollector
 				}
 				eRecord.XmlEventData = EventProperties;
 
-				string jsonRecord = "";
+				string dnsLogMessage = "";
 				if (collector.ProviderName == "Microsoft-Windows-DNSServer")
 				{
 					var (dnsRecord, err) = RecordsMapper.MapDnsServerRecord(eRecord);
@@ -218,32 +214,17 @@ class ETWCollector
 
 					// query: oleh-test1.ews.test IN AAAA (10.1.3.5) 
 					// meta: {"EventName":"LOOK_UP","InterfaceIp":"10.1.2.46","SourceIp":"10.1.3.5","Qname":"oleh-test1.ews.test.","LookupType":"QUERY_RECEIVED"}
-					jsonRecord = Newtonsoft.Json.JsonConvert.SerializeObject(dnsRecord);
+					// dnsLogMessage = Newtonsoft.Json.JsonConvert.SerializeObject(dnsRecord);
 
-					var msg = $"query: {dnsRecord.Qname} {RecordsMapper.GetQueryTypeName(dnsRecord.Qtype)} ({dnsRecord.SourceIp})";
-					// _sysLogClient.Send(msg, "SilkETWService", facility: 1, severity: 6);
-
-					var meta = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonRecord);
-					var sde = new SyslogNet.Client.StructuredDataElement("meta", meta);
-
-					var syslogMessage = new SyslogNet.Client.SyslogMessage(
-						DateTimeOffset.Now,
-						SyslogNet.Client.Facility.UserLevelMessages,
-						SyslogNet.Client.Severity.Informational,
-						Dns.GetHostName(),
-						"SilkETWService",
-						"", "", msg, sde
-					);
-					var serializer = new SyslogRfc5424MessageSerializer();
-					_sysLogClient.Send(syslogMessage, serializer);
+					dnsLogMessage = $"client: SilkETWService, queryTime: {dnsRecord.Timestamp}, query: {dnsRecord.Qname} {RecordsMapper.GetQueryTypeName(dnsRecord.Qtype)} ({dnsRecord.SourceIp})";
 				}
 
 				// Serialize to JSON
-				string JSONEventData = jsonRecord == ""
+				string logMessage = dnsLogMessage == ""
 					? Newtonsoft.Json.JsonConvert.SerializeObject(eRecord)
-					: jsonRecord;
+					: dnsLogMessage;
 
-				int ProcessResult = ProcessJSONEventData(JSONEventData, collector.OutputType, collector.Path);
+				int ProcessResult = ProcessLogMessage(logMessage, collector.OutputType, collector.Path);
 
 				// Verify that we processed the result successfully
 				if (ProcessResult != 0)
@@ -274,13 +255,15 @@ class ETWCollector
 		};
 	}
 
-	static int ProcessJSONEventData(String JSONData, OutputType OutputType, String Path)
+	static int ProcessLogMessage(String logMessage, OutputType OutputType, String Path)
 	{
 		//--[Return Codes]
 		// 0 == OK
 		// 1 == File write failed
 		// 2 == URL POST request failed
 		// 3 == Eventlog write failed
+		// 4 == Syslog write failed
+		// 5 == Unknown output type
 		//--
 
 		// Process JSON
@@ -290,11 +273,11 @@ class ETWCollector
 			{
 				if (!File.Exists(Path))
 				{
-					File.WriteAllText(Path, (JSONData + Environment.NewLine));
+					File.WriteAllText(Path, (logMessage + Environment.NewLine));
 				}
 				else
 				{
-					File.AppendAllText(Path, (JSONData + Environment.NewLine));
+					File.AppendAllText(Path, (logMessage + Environment.NewLine));
 				}
 
 				return 0;
@@ -304,7 +287,8 @@ class ETWCollector
 				return 1;
 			}
 		}
-		else if (OutputType == OutputType.url)
+
+		if (OutputType == OutputType.url)
 		{
 			try
 			{
@@ -316,7 +300,7 @@ class ETWCollector
 				webRequest.Accept = "application/json";
 				using (var streamWriter = new StreamWriter(webRequest.GetRequestStream()))
 				{
-					streamWriter.Write(JSONData);
+					streamWriter.Write(logMessage);
 					streamWriter.Flush();
 					streamWriter.Close();
 				}
@@ -332,11 +316,11 @@ class ETWCollector
 			{
 				return 2;
 			}
-
 		}
-		else
+
+		if (OutputType == OutputType.url)
 		{
-			Boolean WriteEvent = WriteEventLogEntry(JSONData, EventLogEntryType.Information, EventIds.Event, Path);
+			Boolean WriteEvent = WriteEventLogEntry(logMessage, EventLogEntryType.Information, EventIds.Event, Path);
 
 			if (WriteEvent)
 			{
@@ -348,8 +332,29 @@ class ETWCollector
 			}
 		}
 
-		// check if syslog enabled
-		// todo: get host/port from config
+		if (OutputType == OutputType.syslog)
+		{
+			var syslogFullMessage = new SyslogNet.Client.SyslogMessage(
+				DateTimeOffset.Now,
+				SyslogNet.Client.Facility.UserLevelMessages,
+				SyslogNet.Client.Severity.Informational,
+				Dns.GetHostName(),
+				"SilkETWService", logMessage
+			);
+
+			try
+			{
+				var serializer = new SyslogRfc5424MessageSerializer();
+				_sysLogClient.Send(syslogFullMessage, serializer);
+			}
+			catch
+			{
+				return 4;
+			}
+		}
+
+		SilkUtility.WriteToServiceTextLog("No output type matched for event data processing.");
+		return 5;
 	}
 
 	static void RetargetEventSource(String LegacySource)
