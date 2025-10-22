@@ -343,12 +343,19 @@ class ETWCollector
 
 		if (OutputType == OutputType.syslog)
 		{
+			// var meta = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonRecord);
+			var dict = new Dictionary<string, string>
+			{
+				{ "foo", "bar" }
+			};
+			var sde = new SyslogNet.Client.StructuredDataElement("meta", dict);
+
 			var syslogFullMessage = new SyslogNet.Client.SyslogMessage(
 				DateTimeOffset.Now,
 				SyslogNet.Client.Facility.UserLevelMessages,
 				SyslogNet.Client.Severity.Informational,
 				Dns.GetHostName(),
-				"SilkETWService","","", logMessage
+				"SilkETWService", "", "", logMessage, sde
 			);
 
 			try
