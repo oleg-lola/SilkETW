@@ -8,10 +8,11 @@
 		<Guid>21ac2393-3bbb-4702-a01c-b593e21913dc</Guid>
 		<CollectorType>user</CollectorType>
 		<ProviderName>Microsoft-Windows-DNSServer</ProviderName>
-		<!-- <OutputType>syslog</OutputType> -->
-		<SysLogPath>udp:logger.ews.lan:514</SysLogPath>
-		<OutputType>file</OutputType>
+		<SysLogPath>udp:10.1.2.21:514</SysLogPath>
+
+		<OutputType>syslog</OutputType>
+		<!-- <OutputType>file</OutputType> -->
 		<!-- <Path>C:\Users\Administrator\Downloads\dns-server-logs-service.json</Path> -->
-		<Path>D:\Repositories\personal\SilkETW\SilkService\bin\Release\net8.0\dns-server-logs-service.json</Path>
+		<!-- <Path>D:\Repositories\personal\SilkETW\SilkService\bin\Release\net8.0\dns-server-logs-service.json</Path> -->
 	</ETWCollector>
 </SilkServiceConfig>

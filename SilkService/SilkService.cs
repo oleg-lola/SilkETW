@@ -68,8 +68,8 @@ public class SilkService : IHostedService
 
         var cc = CollectorConfig.First(c => !string.IsNullOrEmpty(c.SysLogPath));
         var sysLogParts = cc.SysLogPath.Split(':');
-        // _sysLogClient = new SysLogClient(sysLogParts[1], Convert.ToInt32(sysLogParts[2]));
         _sysLogClient = new SyslogUdpSender(sysLogParts[1], Convert.ToInt32(sysLogParts[2]));
+        SilkUtility.WriteToServiceTextLog($"Syslog client initialized to {sysLogParts[1]}:{sysLogParts[2]}.");
 
         // We spin up the collector threads
         SilkUtility.WriteToServiceTextLog("[*] Starting collector threads: " + DateTime.Now);
@@ -115,7 +115,10 @@ public class SilkService : IHostedService
                 try
                 {
                     CollectorTask.EventSource.StopProcessing();
-                    TraceEventSession.GetActiveSession(CollectorTask.EventParseSessionName).Dispose();
+                    var tes = TraceEventSession.GetActiveSession(CollectorTask.EventParseSessionName);
+                    SilkUtility.WriteToServiceTextLog($"Disposing traceEventSession {tes.SessionName}.");
+                    tes.Stop();
+                    tes.Dispose();
                     SilkUtility.CollectorTaskList.Remove(CollectorTask);
                     SilkUtility.WriteCollectorGuidMessageToServiceTextLog(CollectorTask.CollectorGUID, "Collector terminated", false);
                 }

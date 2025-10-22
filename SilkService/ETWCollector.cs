@@ -13,6 +13,7 @@ namespace SilkService;
 class ETWCollector
 {
 	private static ISyslogMessageSender _sysLogClient;
+	private static SyslogRfc5424MessageSerializer _serializer = new SyslogRfc5424MessageSerializer();
 
 	public static void StartTrace(CollectorParameters collector, ISyslogMessageSender sysLogClient)
 	{
@@ -224,28 +225,36 @@ class ETWCollector
 					? Newtonsoft.Json.JsonConvert.SerializeObject(eRecord)
 					: dnsLogMessage;
 
-				int ProcessResult = ProcessLogMessage(logMessage, collector.OutputType, collector.Path);
+				int result = ProcessLogMessage(logMessage, collector.OutputType, collector.Path);
 
 				// Verify that we processed the result successfully
-				if (ProcessResult != 0)
+				if (result != 0)
 				{
-					if (ProcessResult == 1)
+					if (result == 1)
 					{
 						SilkUtility.WriteCollectorGuidMessageToServiceTextLog(collector.CollectorGUID, "The collector failed to write to file", true);
 					}
-					else if (ProcessResult == 2)
+					else if (result == 2)
 					{
 						SilkUtility.WriteCollectorGuidMessageToServiceTextLog(collector.CollectorGUID, "The collector failed to POST the result", true);
 					}
-					else
+					else if (result == 3)
 					{
 						SilkUtility.WriteCollectorGuidMessageToServiceTextLog(collector.CollectorGUID, "The collector failed write to the eventlog", true);
+					}
+					else if (result == 4)
+					{
+						SilkUtility.WriteCollectorGuidMessageToServiceTextLog(collector.CollectorGUID, "The collector failed to publish to syslog", true);
+					}
+					else if (result == 5)
+					{
+						SilkUtility.WriteCollectorGuidMessageToServiceTextLog(collector.CollectorGUID, "Unknown output type", true);
 					}
 
 					// Write status to eventlog if dictated by the output type
 					if (collector.OutputType == OutputType.eventlog)
 					{
-						WriteEventLogEntry($"{{\"Collector\":\"Stop\",\"Error\":true,\"ErrorCode\":{ProcessResult}}}", EventLogEntryType.Error, EventIds.StopError, collector.Path);
+						WriteEventLogEntry($"{{\"Collector\":\"Stop\",\"Error\":true,\"ErrorCode\":{result}}}", EventLogEntryType.Error, EventIds.StopError, collector.Path);
 					}
 
 					// This collector encountered an error, terminate the service
@@ -318,7 +327,7 @@ class ETWCollector
 			}
 		}
 
-		if (OutputType == OutputType.url)
+		if (OutputType == OutputType.eventlog)
 		{
 			Boolean WriteEvent = WriteEventLogEntry(logMessage, EventLogEntryType.Information, EventIds.Event, Path);
 
@@ -339,18 +348,20 @@ class ETWCollector
 				SyslogNet.Client.Facility.UserLevelMessages,
 				SyslogNet.Client.Severity.Informational,
 				Dns.GetHostName(),
-				"SilkETWService", logMessage
+				"SilkETWService","","", logMessage
 			);
 
 			try
 			{
-				var serializer = new SyslogRfc5424MessageSerializer();
-				_sysLogClient.Send(syslogFullMessage, serializer);
+				_sysLogClient.Send(syslogFullMessage, _serializer);
 			}
-			catch
+			catch (Exception e)
 			{
+				SilkUtility.WriteToServiceTextLog($"Error publishing to syslog: {e}");
 				return 4;
 			}
+
+			return 0;
 		}
 
 		SilkUtility.WriteToServiceTextLog("No output type matched for event data processing.");
@@ -412,6 +423,7 @@ class ETWCollector
 	{
 		es.StopProcessing();
 		ts?.Stop();
+		ts?.Dispose();
 		SilkUtility.WriteCollectorGuidMessageToServiceTextLog(collectorGuid, "Collector terminated", false);
 	}
 
