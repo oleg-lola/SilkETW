@@ -246,9 +246,9 @@ namespace SilkETW
     }
 
 // TimeStamp=2025-09-09T12:22:56.2323467+03:00
-// InterfaceIP=10.1.2.46 (ServerIP)
-// Source=10.1.3.5       (ClientIP)
-// QNAME=hello.ews.test.
+// InterfaceIP=1.2.3.4 (ServerIP)
+// Source=5.6.7.8       (ClientIP)
+// QNAME=hello.test.
 // ProcessName=dns
 // LookupType=QUERY_RECEIVED
 

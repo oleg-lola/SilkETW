@@ -213,8 +213,8 @@ class ETWCollector
 
 					if (dnsRecord.LookupType != "QUERY_RECEIVED") return;
 
-					// query: oleh-test1.ews.test IN AAAA (10.1.3.5) 
-					// meta: {"EventName":"LOOK_UP","InterfaceIp":"10.1.2.46","SourceIp":"10.1.3.5","Qname":"oleh-test1.ews.test.","LookupType":"QUERY_RECEIVED"}
+					// query: test1.test IN AAAA (1.2.3.4)
+					// meta: {"EventName":"LOOK_UP","InterfaceIp":"2.2.2.2","SourceIp":"1.2.3.4","Qname":"test1.test.","LookupType":"QUERY_RECEIVED"}
 					// dnsLogMessage = Newtonsoft.Json.JsonConvert.SerializeObject(dnsRecord);
 
 					dnsLogMessage = $"client: SilkETWService, queryTime: {dnsRecord.Timestamp}, query: {dnsRecord.Qname} {RecordsMapper.GetQueryTypeName(dnsRecord.Qtype)} ({dnsRecord.SourceIp})";

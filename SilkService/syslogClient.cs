@@ -43,10 +43,3 @@ public class SysLogClient
 
     public void Close() => _udpClient?.Close();
 }
-
-// 09:48:17 WIN-DNS-TEST SilkETWService: 
-// {"EventName":"LOOK_UP","Timestamp":"2025-10-14T12:48:15.1657119+03:00","InterfaceIp":"10.1.2.46","SourceIp":"10.1.3.5","Qname":"oleh-test1.ews.test.","ProcessName":"dns","LookupType":"QUERY_RECEIVED"}
-
-// needs
-// 09:48:17 WIN-DNS-TEST info: client SilkETWService query: oleh-test1.ews.test IN AAAA (10.1.3.5) 
-// meta: {"EventName":"LOOK_UP","InterfaceIp":"10.1.2.46","SourceIp":"10.1.3.5","Qname":"oleh-test1.ews.test.","LookupType":"QUERY_RECEIVED"}

@@ -8,7 +8,7 @@
 		<Guid>21ac2393-3bbb-4702-a01c-b593e21913dc</Guid>
 		<CollectorType>user</CollectorType>
 		<ProviderName>Microsoft-Windows-DNSServer</ProviderName>
-		<SysLogPath>udp:10.1.2.21:514</SysLogPath>
+		<SysLogPath>udp:5.6.7.8:514</SysLogPath>
 
 		<OutputType>syslog</OutputType>
 		<!-- <OutputType>file</OutputType> -->

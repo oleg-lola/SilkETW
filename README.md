@@ -126,7 +126,7 @@ SilkService ingests an XML configuration file, "SilkServiceConfig.xml", which sh
 		<ProviderName>Microsoft-Windows-DNSServer</ProviderName>
 		<OutputType>file</OutputType>
 		<Path>C:\Users\Administrator\Downloads\dns-server-logs-service.json</Path>
-		<SysLogPath>udp:logger.ews.lan:514</SysLogPath>
+		<SysLogPath>udp:syslogserver.test:514</SysLogPath>
 	</ETWCollector>
 </SilkServiceConfig>
 ```
